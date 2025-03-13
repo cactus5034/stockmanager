@@ -1,0 +1,200 @@
+import sqlite3
+import csv
+
+# 데이터베이스 초기화 함수
+def init_db():
+    conn = sqlite3.connect("inventory.db")
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS inventory (
+            barcode TEXT PRIMARY KEY,
+            name TEXT,
+            stock INTEGER,
+            location TEXT,
+            equipment_group TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def connect_db():
+    return sqlite3.connect("inventory.db")
+
+# 총 상품 수 가져오기
+def get_total_product_count():
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM inventory")  # 제품 개수 조회
+    total_products = cursor.fetchone()[0]
+    conn.close()
+    return total_products
+
+# 상품 추가 함수
+def add_product(barcode, name, stock, location, equipment_group):
+    conn = sqlite3.connect("inventory.db")
+    cur = conn.cursor()
+    cur.execute("INSERT INTO inventory (barcode, name, stock, location, equipment_group) VALUES (?, ?, ?, ?, ?)",
+                (barcode, name, stock, location, equipment_group))
+    conn.commit()
+    conn.close()
+
+# 모든 상품 가져오기
+def get_all_products():
+    """✅ DB에서 모든 제품 불러오기"""
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT barcode, name, stock, location, equipment_group FROM inventory")
+    products = cursor.fetchall()
+    
+    print(f"📦 DB에서 가져온 데이터: {products}")  # ✅ 디버깅 로그 추가 (DB 데이터 확인)
+    
+    conn.close()
+    return products
+
+
+def update_stock(barcode, amount):
+    """✅ 바코드로 제품을 검색한 후 재고를 업데이트"""
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    # ✅ 1. 바코드가 존재하는지 먼저 확인
+    cursor.execute("SELECT stock FROM inventory WHERE barcode = ?", (barcode,))
+    product = cursor.fetchone()
+
+    if not product:  # ❌ 제품이 없으면 False 반환
+        conn.close()
+        return False, None
+
+    # ✅ 2. 기존 재고 값 가져오기 & 업데이트
+    current_stock = product[0]
+    new_stock = max(0, current_stock + amount)  # 재고가 0 이하로 내려가지 않도록 처리
+
+    cursor.execute("UPDATE inventory SET stock = ? WHERE barcode = ?", (new_stock, barcode))
+    conn.commit()
+    conn.close()
+    return True, new_stock  # ✅ 성공 시 True 반환
+
+
+
+def get_stock_by_barcode(barcode):
+    """✅ 바코드로 제품 정보 검색하여 제품명과 재고 반환"""
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, stock FROM inventory WHERE barcode = ?", (barcode,))
+    product = cursor.fetchone()
+    conn.close()
+
+    if product:
+        return product  # (name, stock) 반환
+    return None  # 제품이 없으면 None 반환
+
+
+
+##########
+
+import os
+
+
+from PyQt5.QtWidgets import QMessageBox
+
+import sqlite3
+
+def search_product(search_text):
+    """📦 바코드 또는 제품명에 포함된 텍스트로 검색하여 모든 정보 반환"""
+    conn = sqlite3.connect("inventory.db")
+    cursor = conn.cursor()
+    
+    query = """
+    SELECT barcode, name, stock, location, equipment_group 
+    FROM inventory 
+    WHERE CAST(barcode AS TEXT) LIKE ? OR name LIKE ?
+    """  # 🔥 직접 문자열 삽입하여 LIKE 검색 오류 해결
+
+    try:
+        cursor.execute(query, (f"%{search_text}%", f"%{search_text}%"))
+        results = cursor.fetchall()
+    except sqlite3.OperationalError as e:
+        print(f"❌ [ERROR] SQL 실행 중 오류 발생: {e}")
+        results = []
+    
+    conn.close()
+    return results  # 여러 개의 검색 결과 반환
+
+
+
+
+
+def delete_product(barcode):
+    """🗑 데이터베이스에서 특정 제품 삭제 (오류 발생 시 GUI 알림 가능)"""
+    conn = sqlite3.connect("inventory.db")
+    cursor = conn.cursor()
+
+    try:
+        query = "DELETE FROM inventory WHERE barcode = ?"
+        cursor.execute(query, (barcode,))
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            print(f"⚠️ [WARNING] 바코드 {barcode}에 해당하는 제품이 없습니다.")
+            return False  # 삭제된 데이터 없음
+        
+        print(f"✅ [SUCCESS] 바코드 {barcode} 제품 삭제 완료.")
+        return True  # 정상 삭제 완료
+
+    except sqlite3.OperationalError as e:
+        print(f"❌ [ERROR] 데이터베이스 삭제 중 오류 발생: {e}")
+        return False  # 오류 발생
+
+    finally:
+        conn.close()
+    
+    
+    
+    
+
+def modify_product(barcode, new_name, new_stock, new_location, new_equipment):
+    """✏️ 제품 정보 수정"""
+    conn = sqlite3.connect("inventory.db")
+    cursor = conn.cursor()
+
+    query = """
+    UPDATE inventory
+    SET name = ?, stock = ?, location = ?, equipment_group = ?
+    WHERE barcode = ?
+    """
+    cursor.execute(query, (new_name, new_stock, new_location, new_equipment, barcode))
+    conn.commit()
+
+    conn.close()
+
+
+
+
+######
+
+
+        
+def export_inventory_to_csv(filename):
+    conn = connect_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT * FROM inventory")
+        products = cursor.fetchall()
+
+        # CSV 파일 작성
+        with open(filename, 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Barcode", "Product Name", "Stock", "Location", "Equipment Group"])  # 헤더 추가
+            writer.writerows(products)  # 데이터 추가
+        
+        conn.close()
+        return True  # 성공 시 True 반환
+
+    except Exception as e:
+        print("Error exporting CSV:", e)
+        conn.close()
+        return False  # 실패 시 False 반환
+
+# 데이터베이스 초기화 실행
+init_db()
