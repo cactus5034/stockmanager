@@ -1,0 +1,12 @@
+import database
+
+# ✅ 지연 임포트로 순환 임포트 해결
+def run_app():
+    from gui import InventoryApp  # 🛑 지연 임포트 (Circular Import 해결)
+    database.init_db()
+    app = InventoryApp()
+    app.mainloop()
+    database.close_connection()
+
+if __name__ == "__main__":
+    run_app()
