@@ -35,7 +35,7 @@ class InventoryApp(QMainWindow):
 
         # === 사이드바 (네비게이션) ===
         self.sidebar = QFrame()
-        self.sidebar.setFixedWidth(200)
+        self.sidebar.setFixedWidth(600)
         self.sidebar.setStyleSheet("background-color: #f4f4f4; border-right: 2px solid #ccc;")
         self.sidebar_layout = QVBoxLayout(self.sidebar)
 
@@ -397,7 +397,7 @@ class InventoryApp(QMainWindow):
         name = self.product_name_input.text()
         stock = self.product_stock_input.text()
         location = self.location_input.text()
-        equipment_group = self.equipment_group_input.text()
+        equipment_group = self.equipment_group_input.currentText()
 
         if not (barcode and name and stock and location and equipment_group):
             return  
