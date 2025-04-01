@@ -79,9 +79,15 @@ class InventoryApp(QMainWindow):
         button = QPushButton(name)
         button.setFont(QFont("SamsungOne", 12))
         button.setStyleSheet("QPushButton {background-color: #007BFF; color: white; border-radius: 5px; padding: 10px;} QPushButton:hover {background-color: #0056b3;}")
-        button.clicked.connect(lambda: self.pages.setCurrentIndex(index))
-        self.sidebar_layout.addWidget(button)
+        
+        # ✅ 버튼 동작 정의 (페이지 이동 + 대시보드 새로고침)
+        def on_click():
+            if name == "Dashboard / Inventory":
+                self.load_inventory_data()  # 🔥 최신 데이터로 대시보드 갱신
+            self.pages.setCurrentIndex(index)
 
+        button.clicked.connect(on_click)
+        self.sidebar_layout.addWidget(button)
 #########################################
 
     def setup_dashboard_inventory(self):
