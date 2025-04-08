@@ -35,7 +35,7 @@ class InventoryApp(QMainWindow):
 
         # === 사이드바 (네비게이션) ===
         self.sidebar = QFrame()
-        self.sidebar.setFixedWidth(600)
+        self.sidebar.setFixedWidth(300)
         self.sidebar.setStyleSheet("background-color: #f4f4f4; border-right: 2px solid #ccc;")
         self.sidebar_layout = QVBoxLayout(self.sidebar)
 
@@ -80,14 +80,16 @@ class InventoryApp(QMainWindow):
         button.setFont(QFont("SamsungOne", 12))
         button.setStyleSheet("QPushButton {background-color: #007BFF; color: white; border-radius: 5px; padding: 10px;} QPushButton:hover {background-color: #0056b3;}")
         
-        # ✅ 버튼 동작 정의 (페이지 이동 + 대시보드 새로고침)
-        def on_click():
-            if name == "Dashboard / Inventory":
-                self.load_inventory_data()  # 🔥 최신 데이터로 대시보드 갱신
+        def handle_click():
+            if hasattr(self, "modify_widget") and self.modify_widget is not None:
+                self.modify_widget.setParent(None)
+                self.modify_widget.deleteLater()
+                self.modify_widget = None
             self.pages.setCurrentIndex(index)
 
-        button.clicked.connect(on_click)
+        button.clicked.connect(handle_click)
         self.sidebar_layout.addWidget(button)
+
 #########################################
 
     def setup_dashboard_inventory(self):
@@ -275,8 +277,8 @@ class InventoryApp(QMainWindow):
         
         # 5️⃣ ✅ 옵션 추가 (이 리스트만 선택 가능)
         equipment_options = [
-            "LAM(ALD)", "LAM(HDP)", "IPS(ALD)", "IPS(GEMINI, ASI)",
-            "IPS(MP)", "TEL(TOSZ)", "SEMES(TOSZ)"
+            "LAM(ALD)", "LAM(HDP)", "IPS(ALD)", "IPS(SION, ASI)",
+            "IPS(ABAS)", "TEL(TOSZ)", "SEMES(TOSZ)" , "ORING & ETC"
         ]
         self.equipment_group_input.addItems(equipment_options)
 
@@ -679,34 +681,22 @@ class InventoryApp(QMainWindow):
 
 
     def refresh_dashboard_inventory(self):
-        """🔄 수정된 데이터를 반영하여 대시보드 및 인벤토리 UI 새로고침"""
+        
         try:
-            self.table.setRowCount(0)  # 기존 데이터 초기화
-            self.inventory_table.setRowCount(0)
-
-            # 🔥 최신 데이터 가져오기
+            self.table.setRowCount(0)  # ✅ 실제로 존재하는 테이블만 초기화
             data = database.get_all_products()
 
             for row_idx, row_data in enumerate(data):
-                    # 📊 대시보드 테이블 업데이트
-                self.dashboard_table.insertRow(row_idx)
+                self.table.insertRow(row_idx)
                 for col_idx, value in enumerate(row_data):
-                    self.dashboard_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+                    self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
 
-                # 📦 인벤토리 테이블 업데이트
-                self.inventory_table.insertRow(row_idx)
-                for col_idx, value in enumerate(row_data):
-                    self.inventory_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
-
-            print("✅ [SUCCESS] 대시보드 및 인벤토리 UI가 새로고침되었습니다.")
-
+            print("✅ [SUCCESS] 대시보드 UI가 새로고침되었습니다.")
         except Exception as e:
             print(f"❌ [ERROR] refresh_dashboard_inventory 실행 중 오류 발생: {e}")
-            QMessageBox.critical(self, "Error", f"An error occurred while refreshing data:\n{str(e)}")
+            QMessageBox.critical(self, "Error", f"An error occurred while refreshing data:\\n{str(e)}")
 
-
-
-        
+            
     def open_modify_delete_page(self):
         """🔄 수정/삭제 페이지를 열기 (사이드 버튼 클릭 시 실행)"""
         try:
