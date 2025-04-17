@@ -8,7 +8,8 @@ def init_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
             barcode TEXT PRIMARY KEY,
-            name TEXT,
+            qcode TEXT,
+            description TEXT,
             stock INTEGER,
             location TEXT,
             equipment_group TEXT
@@ -30,20 +31,25 @@ def get_total_product_count():
     return total_products
 
 # 상품 추가 함수
-def add_product(barcode, name, stock, location, equipment_group):
+def add_product(barcode, qcode, description, stock, location, equipment_group):
     conn = sqlite3.connect("inventory.db")
     cur = conn.cursor()
-    cur.execute("INSERT INTO inventory (barcode, name, stock, location, equipment_group) VALUES (?, ?, ?, ?, ?)",
-                (barcode, name, stock, location, equipment_group))
-    conn.commit()
-    conn.close()
+    try:
+        cur.execute("INSERT INTO inventory (barcode, qcode, description, stock, location, equipment_group) VALUES (?, ?, ?, ?, ?, ?)",
+                (barcode, qcode, description, stock, location, equipment_group))
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.IntegrityError:
+        conn.close()
+        return False
 
 # 모든 상품 가져오기
 def get_all_products():
     """✅ DB에서 모든 제품 불러오기"""
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT barcode, name, stock, location, equipment_group FROM inventory")
+    cursor.execute("SELECT barcode, qcode, description, stock, location, equipment_group FROM inventory")
     products = cursor.fetchall()
     
     print(f"📦 DB에서 가져온 데이터: {products}")  # ✅ 디버깅 로그 추가 (DB 데이터 확인)
@@ -66,13 +72,18 @@ def update_stock(barcode, amount):
         return False, None
 
     # ✅ 2. 기존 재고 값 가져오기 & 업데이트
-    current_stock = product[0]
-    new_stock = max(0, current_stock + amount)  # 재고가 0 이하로 내려가지 않도록 처리
+    try:
+        current_stock = product[0]
+        new_stock = max(0, current_stock + amount)  # 재고가 0 이하로 내려가지 않도록 처리
 
-    cursor.execute("UPDATE inventory SET stock = ? WHERE barcode = ?", (new_stock, barcode))
-    conn.commit()
-    conn.close()
-    return True, new_stock  # ✅ 성공 시 True 반환
+        cursor.execute("UPDATE inventory SET stock = ? WHERE barcode = ?", (new_stock, barcode))
+        conn.commit()
+        conn.close()
+        return True, new_stock  # ✅ 성공 시 True 반환
+
+    except sqlite3.IntegrityError:
+        conn.close()
+        return False, current_stock  # 실패 시 기존 재고 그대로 반환
 
 
 
@@ -80,12 +91,12 @@ def get_stock_by_barcode(barcode):
     """✅ 바코드로 제품 정보 검색하여 제품명과 재고 반환"""
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT name, stock FROM inventory WHERE barcode = ?", (barcode,))
+    cursor.execute("SELECT qcode, stock FROM inventory WHERE barcode = ?", (barcode,))
     product = cursor.fetchone()
     conn.close()
 
     if product:
-        return product  # (name, stock) 반환
+        return product  # (qcode, stock) 반환
     return None  # 제품이 없으면 None 반환
 
 
@@ -105,9 +116,9 @@ def search_product(search_text):
     cursor = conn.cursor()
     
     query = """
-    SELECT barcode, name, stock, location, equipment_group 
+    SELECT barcode, qcode, description, stock, location, equipment_group 
     FROM inventory 
-    WHERE CAST(barcode AS TEXT) LIKE ? OR name LIKE ?
+    WHERE CAST(barcode AS TEXT) LIKE ? OR qcode LIKE ?
     """  # 🔥 직접 문자열 삽입하여 LIKE 검색 오류 해결
 
     try:
@@ -152,17 +163,17 @@ def delete_product(barcode):
     
     
 
-def modify_product(barcode, new_name, new_stock, new_location, new_equipment):
+def modify_product(barcode, new_qcode, new_description, new_stock, new_location, new_equipment):
     """✏️ 제품 정보 수정"""
     conn = sqlite3.connect("inventory.db")
     cursor = conn.cursor()
 
     query = """
     UPDATE inventory
-    SET name = ?, stock = ?, location = ?, equipment_group = ?
+    SET qcode = ?, description =?,  stock = ?, location = ?, equipment_group = ?
     WHERE barcode = ?
     """
-    cursor.execute(query, (new_name, new_stock, new_location, new_equipment, barcode))
+    cursor.execute(query, (new_qcode, new_description, new_stock, new_location, new_equipment, barcode))
     conn.commit()
 
     conn.close()
@@ -185,7 +196,7 @@ def export_inventory_to_csv(filename):
         # CSV 파일 작성
         with open(filename, 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Barcode", "Product Name", "Stock", "Location", "Equipment Group"])  # 헤더 추가
+            writer.writerow(["Barcode", "Qcode", "Description", "Stock", "Location", "Equipment Group"])  # 헤더 추가
             writer.writerows(products)  # 데이터 추가
         
         conn.close()
