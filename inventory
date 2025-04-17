@@ -1,716 +1,339 @@
-import sys
-import csv
-import database  # 데이터베이스 연동
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QComboBox,QHeaderView,
-    QVBoxLayout, QHBoxLayout, QFrame, QTableWidget, QTableWidgetItem, QSizePolicy,
-    QLineEdit, QStackedWidget, QFileDialog, QMessageBox, QAbstractItemView, QSpinBox
-)
-from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIntValidator  # ✅ PyQt5.QtWidgets가 아니라 PyQt5.QtGui에서 가져와야 함
 
+import sys
+import database
+import pandas as pd
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
+    QLineEdit, QStackedWidget, QTableWidget,QDialog ,QTableWidgetItem, QComboBox, QMessageBox, QFileDialog
+)
+from PyQt5.QtGui import QFont, QIntValidator
+from PyQt5.QtCore import Qt
 
 class InventoryApp(QMainWindow):
     def __init__(self):
         super().__init__()
-
         self.setWindowTitle("Stock Manager")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 2000, 1200)
+        self.selected_barcode = None
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
-
         self.main_layout = QVBoxLayout(self.central_widget)
 
-        # === 상단 타이틀 ===
-        self.title_label = QLabel("Stock Manager", self)
-        self.title_label.setFont(QFont("SamsungOne", 24, QFont.Bold))
+        self.title_label = QLabel("Stock Manager")
+        self.title_label.setFont(QFont("Arial", 20, QFont.Bold))
         self.title_label.setAlignment(Qt.AlignCenter)
         self.main_layout.addWidget(self.title_label)
 
-        # === 메인 컨텐츠 (사이드바 + 중앙) ===
-        self.content_layout = QHBoxLayout()
-        self.main_layout.addLayout(self.content_layout)
+        self.body_layout = QHBoxLayout()
+        self.main_layout.addLayout(self.body_layout)
 
-        # === 사이드바 (네비게이션) ===
-        self.sidebar = QFrame()
-        self.sidebar.setFixedWidth(300)
-        self.sidebar.setStyleSheet("background-color: #f4f4f4; border-right: 2px solid #ccc;")
-        self.sidebar_layout = QVBoxLayout(self.sidebar)
-
-        self.add_sidebar_button("Dashboard / Inventory", 0)
-        self.add_sidebar_button("Stock Update", 1)
-        self.add_sidebar_button("Product Registration", 2)
-        self.add_sidebar_button("Info Modify / Delete", 3)
-        self.add_sidebar_button("Export CSV", 4)
-
-        self.content_layout.addWidget(self.sidebar)
-
-        # === 중앙 컨텐츠 (페이지 전환) ===
+        self.sidebar = QVBoxLayout()
+        self.sidebar.setSpacing(5)  # ✅ 간격 좁힘
         self.pages = QStackedWidget()
-        self.content_layout.addWidget(self.pages)
-        self.content_layout.setStretch(1, 3)
-        
-        
-        #페이지 선언
+
+        self.body_layout.addLayout(self.sidebar)
+        self.body_layout.addWidget(self.pages)
+
+        # 페이지들 선언
         self.dashboard_inventory_page = QWidget()
-        self.stock_update_page = QWidget()
         self.registration_page = QWidget()
         self.modify_delete_page = QWidget()
-        self.export_page = QWidget()
+        self.import_export_page = QWidget()
 
-        self.pages.addWidget(self.dashboard_inventory_page)
-        self.pages.addWidget(self.stock_update_page)
-        self.pages.addWidget(self.registration_page)
-        self.pages.addWidget(self.modify_delete_page)
-        self.pages.addWidget(self.export_page)
+        self.pages.addWidget(self.dashboard_inventory_page)  # index 0
+        self.pages.addWidget(self.registration_page)         # index 1
+        self.pages.addWidget(self.modify_delete_page)        # index 2
+        self.pages.addWidget(self.import_export_page)               # index 3
+        self.pages.addWidget(self.import_export_page)               # index 4
+
+        self.add_sidebar_button("Dashboard / Stock Update", 0)
+        self.add_sidebar_button("Product Registration", 1)
+        self.add_sidebar_button("Modify / Delete", 2)
+        self.add_sidebar_button("Import & Export CSV", 3)
 
         self.setup_dashboard_inventory()
-        self.setup_stock_update()
-        self.setup_product_registration()
-        self.setup_modify_delete()
-        self.setup_export_page()
-
-        # ✅ 프로그램 실행 시 DB에서 데이터 불러오기
-        self.load_inventory_data()
+        self.setup_registration_page()
+        self.setup_modify_delete_page()
+        self.setup_import_export_page()
 
     def add_sidebar_button(self, name, index):
         button = QPushButton(name)
-        button.setFont(QFont("SamsungOne", 12))
-        button.setStyleSheet("QPushButton {background-color: #007BFF; color: white; border-radius: 5px; padding: 10px;} QPushButton:hover {background-color: #0056b3;}")
-        
-        def handle_click():
-            if hasattr(self, "modify_widget") and self.modify_widget is not None:
-                self.modify_widget.setParent(None)
-                self.modify_widget.deleteLater()
-                self.modify_widget = None
-            self.pages.setCurrentIndex(index)
+        button.setFont(QFont("Arial", 12))
+        button.clicked.connect(lambda: self.pages.setCurrentIndex(index))
+        self.sidebar.addWidget(button)
 
-        button.clicked.connect(handle_click)
-        self.sidebar_layout.addWidget(button)
+    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
 
-#########################################
+    from PyQt5.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
+    from PyQt5.QtCore import Qt
+
+    
+    def show_message(self, title, text, icon=None):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setFixedSize(420, 180)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #ffffff;
+                border-radius: 15px;
+            }
+            QLabel {
+                font-size: 16px;
+                padding: 10px;
+                min-height: 40px;
+            }
+            QPushButton {
+                font-size: 14px;
+                padding: 6px 20px;
+                border-radius: 10px;
+                background-color: #0078d7;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #005bb5;
+            }
+        """)
+
+        layout = QVBoxLayout(dialog)
+        label = QLabel(text)
+        label.setAlignment(Qt.AlignCenter)
+        label.setWordWrap(True)
+
+        btn_layout = QHBoxLayout()
+        ok_btn = QPushButton("확인")
+        ok_btn.clicked.connect(dialog.accept)
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addStretch()
+
+        layout.addWidget(label)
+        layout.addLayout(btn_layout)
+        dialog.exec_()
+    
+
+
+
 
     def setup_dashboard_inventory(self):
-        """✅ Dashboard UI 설정 (검색 옵션 추가)"""
         layout = QVBoxLayout(self.dashboard_inventory_page)
-
-        # 🔢 총 제품 개수 표시
-        self.total_products_label = QLabel("Total Products: 0")
-        self.total_products_label.setFont(QFont("SamsungOne", 16))
-        layout.addWidget(self.total_products_label)
-
-        # 🔍 검색창 + 버튼 + 옵션 추가
         search_layout = QHBoxLayout()
-
-        self.search_mode = QComboBox()  # ✅ 검색 방식 선택 (바코드 / 제품명)
-        self.search_mode.setFixedHeight(40)
-        self.search_mode.addItems(["Search by Barcode", "Search by Product Name"])
-
         self.search_input = QLineEdit()
-        self.search_input.setFixedHeight(40)
-        self.search_input.setPlaceholderText("Enter search text")
-
-        self.search_button = QPushButton("🔍 Search")  # ✅ 검색 버튼 추가
-        self.search_button.setFixedHeight(40)
-        self.search_button.clicked.connect(self.search_inventory)  # ✅ 버튼 클릭 시 검색 실행
-        self.search_input.returnPressed.connect(self.search_inventory)  # ✅ Enter 키 입력 시 검색 실행
-
-        search_layout.addWidget(self.search_mode)
+        self.search_input.setPlaceholderText("Search by barcode or Qcode")
+        self.search_button = QPushButton("Search")
+        self.search_button.clicked.connect(self.search_inventory)
         search_layout.addWidget(self.search_input)
         search_layout.addWidget(self.search_button)
-        layout.addLayout(search_layout)
 
-        # 📝 재고 조회 테이블 추가
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Barcode", "Product Name", "Stock", "Location", "Equipment Group"])
-        layout.addWidget(self.table)
-        
-        # ✅ 🔥 테이블 열 크기 자동 조정
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Stretch)  # 🔥 열이 테이블 전체 너비를 가득 채우도록 설정
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Barcode", "Qcode", "Description", "Stock", "Location", "Group"])
+        self.table.itemSelectionChanged.connect(self.load_selected_product)
 
-        self.dashboard_inventory_page.setLayout(layout)
-
-#########################################
-        
-        
-    def search_inventory(self):
-        """✅ 선택된 검색 방식 (바코드 or 제품명)에 따라 정확하게 검색"""
-        search_text = self.search_input.text().strip().lower()  # 🔍 검색어 (소문자로 변환)
-        search_mode = self.search_mode.currentText()  # ✅ 선택된 검색 방식
-
-        print(f"🔍 검색 실행 - 검색어: {search_text}, 검색 방식: {search_mode}")
-
-        self.table.setRowCount(0)  # ✅ 🔥 검색 실행 전에 테이블 초기화
-
-        products = database.get_all_products()  # 🛠 DB에서 모든 제품 가져오기
-        matched_products = []  # ✅ 검색 결과 저장할 리스트
-        
-        # 🔥 검색어가 없으면 전체 목록 다시 표시
-        if not search_text:
-            self.load_inventory_data()
-            return
-
-        for product in products:
-            barcode, name, stock, location, equipment_group = product
-
-            # 🔎 비교를 위해 소문자로 변환
-            barcode_lower = barcode.lower()
-            name_lower = name.lower()
-
-            # 🔍 검색 모드에 따라 필터링 방식 변경 (정확한 매칭)
-            if search_mode == "Search by Barcode" and search_text not in barcode_lower:
-                continue  # 바코드 검색인데 정확히 일치하지 않으면 건너뛰기
-            if search_mode == "Search by Product Name" and search_text not in name_lower:
-                continue  # 제품명 검색인데 정확히 일치하지 않으면 건너뛰기
-
-            # ✅ 검색 결과 리스트에 추가
-            matched_products.append((barcode, name, stock, location, equipment_group))
-
-        # ✅ 검색 결과를 테이블에 추가
-        if matched_products:
-            for barcode, name, stock, location, equipment_group in matched_products:
-                row_count = self.table.rowCount()
-                self.table.insertRow(row_count)
-                self.table.setItem(row_count, 0, QTableWidgetItem(barcode))
-                self.table.setItem(row_count, 1, QTableWidgetItem(name))
-                self.table.setItem(row_count, 2, QTableWidgetItem(str(stock)))
-                self.table.setItem(row_count, 3, QTableWidgetItem(location))
-                self.table.setItem(row_count, 4, QTableWidgetItem(equipment_group))
-        else:
-            # ✅ 검색 결과가 없을 경우 메시지 출력
-            self.table.setRowCount(1)
-            self.table.setItem(0, 0, QTableWidgetItem("No results found"))
-            self.table.setSpan(0, 0, 1, 5)  # ✅ 전체 열을 하나로 병합하여 메시지 표시
-            self.table.item(0, 0).setTextAlignment(Qt.AlignCenter)
-
-       
-#########################################
-
-
-    def setup_stock_update(self):
-        """✅ Stock Update 화면 - 수량 입력 필드 추가"""
-        wrapper_layout = QVBoxLayout(self.stock_update_page)
-        wrapper_layout.setAlignment(Qt.AlignCenter)  # ✅ 페이지 전체를 중앙 정렬
-        
-         # 2️⃣ 내부 요소를 감쌀 새로운 QWidget을 생성 (부모 영향 최소화)
-        central_widget = QWidget()
-        central_layout = QVBoxLayout(central_widget)
-        central_layout.setAlignment(Qt.AlignCenter)  # 🔥 내부 요소도 중앙 정렬 강제
-               
-        self.stock_input = QLineEdit()
-        self.stock_input.setPlaceholderText("Enter barcode")
-        self.stock_input.setFixedHeight(40)  # ✅ 입력 필드 높이 조정
-        self.stock_input.setFixedWidth(650)
-    
-        # ✅ 변경할 수량 입력 필드 추가
         self.quantity_input = QLineEdit()
         self.quantity_input.setPlaceholderText("Enter quantity")
-        self.quantity_input.setValidator(QIntValidator(1, 9999))  # 🔥 숫자만 입력 가능
-        self.quantity_input.setFixedHeight(40)  # ✅ 높이 조정
-        self.quantity_input.setFixedWidth(650)
+        self.quantity_input.setValidator(QIntValidator(1, 9999))
+        self.in_button = QPushButton("+ In")
+        self.out_button = QPushButton("- Out")
+        self.in_button.clicked.connect(lambda: self.update_stock("in"))
+        self.out_button.clicked.connect(lambda: self.update_stock("out"))
 
-        self.product_name_label = QLabel("Product name: -")
-        self.product_name_label.setFixedHeight(40)
-        self.product_name_label.setFixedWidth(650)  
-        self.current_stock_label = QLabel("Current stock(현 재고): -")
-        self.current_stock_label.setFixedHeight(40) 
-        self.current_stock_label.setFixedWidth(650) 
+        action_layout = QHBoxLayout()
+        action_layout.addWidget(self.in_button)
+        action_layout.addWidget(self.out_button)
 
+        layout.addLayout(search_layout)
+        layout.addWidget(self.table)
+        layout.addWidget(self.quantity_input)
+        layout.addLayout(action_layout)
+        self.refresh_dashboard_inventory()
 
-        self.increase_button = QPushButton("+ 입고")
-        self.decrease_button = QPushButton("- 출고")
-        self.increase_button.setFixedHeight(40)
-        self.increase_button.setFixedWidth(320)
-        self.decrease_button.setFixedHeight(40)
-        self.decrease_button.setFixedWidth(320)
-        
-        button_layout = QHBoxLayout()
-        button_layout.setAlignment(Qt.AlignCenter)  # 버튼을 가로 중앙 정렬
-        button_layout.addWidget(self.increase_button)
-        button_layout.addWidget(self.decrease_button)
+    def setup_registration_page(self):
+        layout = QVBoxLayout(self.registration_page)
+        self.reg_barcode = QLineEdit()
+        self.reg_Qcode = QLineEdit()
+        self.reg_description = QLineEdit()
+        self.reg_stock = QLineEdit()
+        self.reg_location = QLineEdit()
+        self.reg_group = QLineEdit()
+        self.reg_button = QPushButton("Register")
+        self.reg_button.clicked.connect(self.register_product)
 
-        # 5️⃣ ✅ 모든 요소를 메인 레이아웃에 추가
-        central_layout.addWidget(self.stock_input, alignment=Qt.AlignCenter)
-        central_layout.addWidget(self.quantity_input, alignment=Qt.AlignCenter)
-        central_layout.addWidget(self.product_name_label, alignment=Qt.AlignCenter)
-        central_layout.addWidget(self.current_stock_label, alignment=Qt.AlignCenter)
-        central_layout.addLayout(button_layout)  # 버튼 레이아웃 추가
+        layout.addWidget(QLabel("Barcode")); layout.addWidget(self.reg_barcode)
+        layout.addWidget(QLabel("Qcode")); layout.addWidget(self.reg_Qcode)
+        layout.addWidget(QLabel("Description")); layout.addWidget(self.reg_description)
+        layout.addWidget(QLabel("Stock")); layout.addWidget(self.reg_stock)
+        layout.addWidget(QLabel("Location")); layout.addWidget(self.reg_location)
+        layout.addWidget(QLabel("Equipment Group")); layout.addWidget(self.reg_group)
+        layout.addWidget(self.reg_button)
 
-        # 6️⃣ `central_widget`을 `wrapper_layout`에 추가 (부모 레이아웃 영향 차단)
-        wrapper_layout.addStretch(1)  # 🔥 위쪽 공간 확보
-        wrapper_layout.addWidget(central_widget, alignment=Qt.AlignCenter)  # 🔥 완전 중앙 정렬
-        wrapper_layout.addStretch(1)  # 🔥 아래쪽 공간 확보
-        
+    def setup_modify_delete_page(self):
+        layout = QVBoxLayout(self.modify_delete_page)
+        self.mod_search = QLineEdit()
+        self.mod_search.setPlaceholderText("Search product")
+        self.mod_button = QPushButton("Search")
+        self.mod_button.clicked.connect(self.search_product_for_modify)
+        self.mod_table = QTableWidget(0, 6)
+        self.mod_table.setHorizontalHeaderLabels(["Barcode", "Qcode", "Description", "Stock", "Location", "Group"])
+        self.mod_table.itemSelectionChanged.connect(self.load_product_for_modify)
 
-        # ✅ 버튼 클릭 시 `action`을 전달하도록 수정
-        self.increase_button.clicked.connect(lambda: self.update_stock("inbound"))
-        self.decrease_button.clicked.connect(lambda: self.update_stock("outbound"))
-
-        self.stock_input.returnPressed.connect(self.search_stock)  
-
-        
-#########################################        
-
-
-    def setup_product_registration(self):
-        ##layout = QVBoxLayout(self.registration_page)
-        
-        # 1️⃣ stock_update_page처럼 중앙 정렬을 위한 래퍼 레이아웃 생성
-        wrapper_layout = QVBoxLayout(self.registration_page)
-        wrapper_layout.setAlignment(Qt.AlignCenter)  # 🔥 페이지 전체 중앙 정렬 강제
-
-        # 2️⃣ 내부 요소를 감쌀 QWidget 생성 (부모 영향 최소화)
-        central_widget = QWidget()
-        central_layout = QVBoxLayout(central_widget)
-        central_layout.setAlignment(Qt.AlignCenter)  # 🔥 내부 요소도 중앙 정렬 강제
-
-        
-        
-        self.barcode_input = QLineEdit()
-        self.product_name_input = QLineEdit()
-        self.product_stock_input = QLineEdit()
-        self.location_input = QLineEdit()
-        self.equipment_group_input = QComboBox()
-        
-        # 5️⃣ ✅ 옵션 추가 (이 리스트만 선택 가능)
-        equipment_options = [
-            "LAM(ALD)", "LAM(HDP)", "IPS(ALD)", "IPS(SION, ASI)",
-            "IPS(ABAS)", "TEL(TOSZ)", "SEMES(TOSZ)" , "ORING & ETC"
-        ]
-        self.equipment_group_input.addItems(equipment_options)
-
-        self.barcode_input.setPlaceholderText("Barcode")
-        self.barcode_input.setFixedHeight(40)
-        self.barcode_input.setFixedWidth(650)
-        self.product_name_input.setPlaceholderText("Product Name")
-        self.product_name_input.setFixedHeight(40)
-        self.product_name_input.setFixedWidth(650)
-        self.product_stock_input.setPlaceholderText("Stock")
-        self.product_stock_input.setFixedHeight(40)
-        self.product_stock_input.setFixedWidth(650)
-        self.location_input.setPlaceholderText("Location")
-        self.location_input.setFixedHeight(40)
-        self.location_input.setFixedWidth(650)
-        self.equipment_group_input.setPlaceholderText("Equipment Group")
-        self.equipment_group_input.setFixedHeight(40)
-        self.equipment_group_input.setFixedWidth(650)
-
-        self.register_button = QPushButton("Register Product")
-        self.register_button.setFixedHeight(40)
-        self.register_button.clicked.connect(self.register_product)
-
-        central_layout.addWidget(self.barcode_input)
-        central_layout.addWidget(self.product_name_input)
-        central_layout.addWidget(self.product_stock_input)
-        central_layout.addWidget(self.location_input)
-        central_layout.addWidget(self.equipment_group_input)
-        central_layout.addWidget(self.register_button)
-        
-        # 5️⃣ `central_widget`을 `wrapper_layout`에 추가 (부모 영향 차단)
-        wrapper_layout.addStretch(1)  # 🔥 위쪽 공간 확보
-        wrapper_layout.addWidget(central_widget, alignment=Qt.AlignCenter)  # 🔥 완전 중앙 정렬
-        wrapper_layout.addStretch(1)  # 🔥 아래쪽 공간 확보
-
-#########################################
-
-    def setup_modify_delete(self):
-        """🔍 수정 및 삭제 페이지 UI 구성"""
-        
-        wrapper_layout = QVBoxLayout(self.modify_delete_page)
-        wrapper_layout.setAlignment(Qt.AlignCenter)  # 🔥 페이지 전체 중앙 정렬 강제
-
-        # 2️⃣ 내부 요소를 감쌀 QWidget 생성 (부모 영향 최소화)
-        central_widget = QWidget()
-        central_layout = QVBoxLayout(central_widget)
-        central_layout.setAlignment(Qt.AlignCenter)  # 🔥 내부 요소도 중앙 정렬 강제
-
-        # 🔍 검색 입력 필드 & 버튼
-        self.search_input = QLineEdit(self)
-        self.search_input.setPlaceholderText("Enter Barcode or Product Name")
-        self.search_input.setFixedHeight(40)
-        self.search_input.setFixedWidth(650)
-
-        self.search_button = QPushButton("Search")
-        self.search_button.setFixedHeight(40)
-        self.search_button.setFixedWidth(650)
-        self.search_button.clicked.connect(self.handle_search)
-
-        search_layout = QHBoxLayout()
-        search_layout.addWidget(self.search_input)
-        search_layout.addWidget(self.search_button)
-
-        # 🔽 검색 결과 테이블
-        self.results_table = QTableWidget(0,5)
-        self.results_table.setColumnCount(5)  
-        self.results_table.setHorizontalHeaderLabels(["Barcode", "Product Name", "Stock", "Location", "Equipment Group"])
-        self.results_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.results_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.results_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        
-        # ✅ 🔥 테이블 열 크기 자동 조정
-        header2 = self.results_table.horizontalHeader()
-        header2.setSectionResizeMode(QHeaderView.Stretch)  # 🔥 열이 테이블 전체 너비를 가득 채우도록 설정
-
-        # ✏️ 수정 & 🗑 삭제 버튼
-        self.modify_button = QPushButton("Modify")
-        self.modify_button.setFixedHeight(40)
-        self.modify_button.setEnabled(False)
-        self.modify_button.clicked.connect(self.handle_modify)
-
+        self.mod_Qcode = QLineEdit()
+        self.mod_description = QLineEdit()
+        self.mod_stock = QLineEdit()
+        self.mod_location = QLineEdit()
+        self.mod_group = QLineEdit()
+        self.save_button = QPushButton("Save")
         self.delete_button = QPushButton("Delete")
-        self.delete_button.setFixedHeight(40)
-        self.delete_button.setEnabled(False)
-        self.delete_button.clicked.connect(self.handle_delete)
+        self.save_button.clicked.connect(self.modify_product)
+        self.delete_button.clicked.connect(self.delete_product)
 
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(self.modify_button)
-        button_layout.addWidget(self.delete_button)
-
-        # 🔗 기존 메인 레이아웃을 먼저 정리하고 추가
-        central_layout.addLayout(search_layout)
-        central_layout.addWidget(self.results_table)
-        central_layout.addLayout(button_layout)
-
-        # 테이블에서 행이 선택될 때 버튼 활성화
-        self.results_table.itemSelectionChanged.connect(self.toggle_buttons)
-
-        # 5️⃣ `central_widget`을 `wrapper_layout`에 추가 (부모 영향 차단)
-        wrapper_layout.addStretch(1)  # 🔥 위쪽 공간 확보
-        wrapper_layout.addWidget(central_widget, alignment=Qt.AlignCenter)  # 🔥 완전 중앙 정렬
-        wrapper_layout.addStretch(1)  # 🔥 아래쪽 공간 확보
-
-
-#########################################
-
-
-    def setup_export_page(self):
-        layout = QVBoxLayout(self.export_page)
-        self.export_button = QPushButton("Export Inventory to CSV")
-        self.export_button.setFixedHeight(50)
-        self.export_button.clicked.connect(self.export_to_csv)
-        layout.addWidget(self.export_button)
-        
-        
-        
-#########################################
-
-
-
-
-    def register_product(self):
-        barcode = self.barcode_input.text()
-        name = self.product_name_input.text()
-        stock = self.product_stock_input.text()
-        location = self.location_input.text()
-        equipment_group = self.equipment_group_input.currentText()
-
-        if not (barcode and name and stock and location and equipment_group):
-            return  
-
-        database.add_product(barcode, name, int(stock), location, equipment_group)
-        self.load_inventory_data()
-        
-        # ✅ 등록 완료 팝업 추가
-        QMessageBox.information(self, "등록 완료", "상품이 성공적으로 등록되었습니다!")
-
-    def search_stock(self):
-        """✅ 바코드로 제품 정보 검색하여 화면에 표시"""
-        barcode = self.stock_input.text().strip()
-
-        if not barcode:
-            self.product_name_label.setText("Product: -")
-            self.current_stock_label.setText("Current Stock: -")
-            return  
-
-        product = database.get_stock_by_barcode(barcode)
-
-        if product:
-            name, stock = product
-            self.product_name_label.setText(f"Product: {name}")
-            self.current_stock_label.setText(f"Current Stock: {stock}")
-        else:
-            self.product_name_label.setText("Product: Not Found")
-            self.current_stock_label.setText("Current Stock: -")
+        layout.addWidget(self.mod_search)
+        layout.addWidget(self.mod_button)
+        layout.addWidget(self.mod_table)
+        layout.addWidget(QLabel("Qcode")); layout.addWidget(self.mod_Qcode)
+        layout.addWidget(QLabel("Description")); layout.addWidget(self.mod_description)
+        layout.addWidget(QLabel("Stock")); layout.addWidget(self.mod_stock)
+        layout.addWidget(QLabel("Location")); layout.addWidget(self.mod_location)
+        layout.addWidget(QLabel("Group")); layout.addWidget(self.mod_group)
+        layout.addWidget(self.save_button)
+        layout.addWidget(self.delete_button)
 
     
+
     
-    def update_stock(self, action):
-        """✅ 입고/출고 시 오류 발생해도 GUI가 꺼지지 않도록 예외 처리 추가"""
-        try:
-            barcode = self.stock_input.text().strip()
-            quantity_text = self.quantity_input.text().strip()
 
-            if not barcode:
-                QMessageBox.warning(self, "입력 오류", "바코드를 입력해주세요!")
-                return  
+    
+    def setup_import_export_page(self):
+        layout = QVBoxLayout(self.import_export_page)
 
-            if not quantity_text.isdigit():  # 🔥 숫자가 아닌 경우 예외 처리
-                QMessageBox.warning(self, "입력 오류", "올바른 수량을 입력해주세요!")
-                return  
+        import_btn = QPushButton("Import CSV to DB")
+        import_btn.clicked.connect(self.import_csv_to_db)
 
-            quantity = int(quantity_text)
+        export_btn = QPushButton("Export DB to CSV")
+        export_btn.clicked.connect(self.export_csv)
 
-            if action == "inbound":
-                success, new_stock = database.update_stock(barcode, quantity)  # ✅ 입력한 수량만큼 증가
-            elif action == "outbound":
-                success, new_stock = database.update_stock(barcode, -quantity)  # ✅ 입력한 수량만큼 감소
-            else:
-                QMessageBox.critical(self, "오류", "알 수 없는 작업 요청입니다.")
-                return
-
-            if success:
-                self.load_inventory_data()  # ✅ 전체 데이터 갱신
-                self.product_name_label.setText(f"Product: {database.get_stock_by_barcode(barcode)[0]}")
-                self.current_stock_label.setText(f"Current Stock: {new_stock}")
-                QMessageBox.information(self, "재고 업데이트 완료", f"현재 재고: {new_stock}")
-                self.quantity_input.clear()  # ✅ 입력 필드 초기화
-            else:
-                QMessageBox.warning(self, "오류", "해당 바코드를 찾을 수 없습니다!")
-
-        except Exception as e:
-            QMessageBox.critical(self, "에러 발생", f"예상치 못한 오류가 발생했습니다:\n{str(e)}")
-
-
-
-
-    def export_to_csv(self):
-        try:
-            filename, _ = QFileDialog.getSaveFileName(self, "Save CSV", "", "CSV Files (*.csv)")
-            if filename:
-                success = database.export_inventory_to_csv(filename)  # ✅ 함수 호출
-            
-                if success:
-                    QMessageBox.information(self, "Success", "CSV file has been successfully exported!")
-                else:
-                    QMessageBox.warning(self, "Error", "Failed to export CSV file!")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Critical Error", f"An unexpected error occurred:\n{str(e)}")
-
-
-
-    def load_inventory_data(self):
-        products = database.get_all_products()
+        layout.addWidget(import_btn)
+        layout.addWidget(export_btn)
+    def search_inventory(self):
+        keyword = self.search_input.text().strip()
+        results = database.search_product(keyword)
         self.table.setRowCount(0)
-        for product in products:
-            row_count = self.table.rowCount()
-            self.table.insertRow(row_count)
-            for col, data in enumerate(product):
-                self.table.setItem(row_count, col, QTableWidgetItem(str(data)))
-        self.update_dashboard()
+        for row_data in results:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            for col, val in enumerate(row_data):
+                self.table.setItem(row, col, QTableWidgetItem(str(val)))
 
+    def load_selected_product(self):
+        row = self.table.currentRow()
+        if row >= 0:
+            self.selected_barcode = self.table.item(row, 0).text()
 
-
-    def update_dashboard(self):
-        total_products = database.get_total_product_count()
-        self.total_products_label.setText(f"Total Products: {total_products}")
-        
-
-
-    def handle_search(self):
-        """🔍 바코드 또는 제품명으로 검색"""
-        search_text = self.search_input.text().strip()
-
-        if not search_text:
-            QMessageBox.warning(self, "Warning", "Please enter a barcode or product name.")
+    def update_stock(self, mode):
+        if not self.selected_barcode:
+            self.show_message("Warning", "Select a product first", QMessageBox.Warning)
             return
-
         try:
-            # 🔥 데이터베이스에서 검색 실행
-            results = database.search_product(search_text)
-
-            if results:
-                print(f"✅ [DEBUG] 검색 결과: {results}")  # 검색 결과 로그 확인
-                self.display_search_results(results)
-            else:
-                print("❌ [DEBUG] 검색 결과 없음")
-                QMessageBox.information(self, "Not Found", "No matching products found.")
-        except Exception as e:
-            print(f"❌ [ERROR] 검색 중 오류 발생: {e}")
-            QMessageBox.critical(self, "Database Error", f"An error occurred while searching:\n{str(e)}")
-
-            
-            
-            
-    def display_search_results(self, results):
-        """🔽 검색 결과를 UI 테이블에 표시"""
-        self.results_table.setRowCount(len(results))
-        for row, product in enumerate(results):
-            for col, value in enumerate(product):
-                self.results_table.setItem(row, col, QTableWidgetItem(str(value)))
-                
-    
-    def handle_modify(self):
-        """✏️ 선택한 제품을 수정"""
-        selected_row = self.results_table.currentRow()
-        if selected_row < 0:
+            qty = int(self.quantity_input.text())
+        except:
+            self.show_message("Invalid", "Enter a valid quantity", QMessageBox.Warning)
             return
-
-        barcode = self.results_table.item(selected_row, 0).text()
-        name = self.results_table.item(selected_row, 1).text()
-        stock = int(self.results_table.item(selected_row, 2).text())
-        location = self.results_table.item(selected_row, 3).text()
-        equipment = self.results_table.item(selected_row, 4).text()
-
-        self.create_modify_page(barcode, name, stock, location, equipment)  # 수정 페이지 열기
-        
-        
-        
-    def handle_delete(self):
-        """🗑 선택한 제품을 삭제"""
-        selected_row = self.results_table.currentRow()
-        if selected_row < 0:
-            return
-
-        barcode = self.results_table.item(selected_row, 0).text()
-
-        confirm = QMessageBox.question(self, "Confirm Delete", f"Are you sure you want to delete {barcode}?",
-                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-        if confirm == QMessageBox.Yes:
-            database.delete_product(barcode)
-            self.results_table.removeRow(selected_row)
-            QMessageBox.information(self, "Deleted", "Product deleted successfully.")
-            
-            
-    def create_modify_page(self, barcode, name, stock, location, equipment_group):
-        """📌 수정 페이지 UI 구성"""
-        
-        try:
-            self.modify_widget = QWidget()
-            layout = QVBoxLayout()
-
-            # 🔹 바코드는 변경 불가 (읽기 전용)
-            self.barcode_label = QLabel(f"Barcode: {barcode}")
-
-            self.name_input = QLineEdit(self)
-            self.name_input.setText(name)
-
-            self.stock_input = QSpinBox(self)
-            self.stock_input.setValue(stock)
-            self.stock_input.setMinimum(0)
-
-            self.location_input = QLineEdit(self)
-            self.location_input.setText(location)
-
-            self.equipment_input = QLineEdit(self)
-            self.equipment_input.setText(equipment_group)
-
-            # 💾 저장 버튼
-            self.save_button = QPushButton("Save Changes")
-            self.save_button.clicked.connect(lambda: self.handle_save(barcode))
-            
-            # 🔙 뒤로 가기 버튼 (대시보드로 복귀)
-            self.back_button = QPushButton("Back to Dashboard")
-            self.back_button.clicked.connect(self.return_to_dashboard)
-
-            layout.addWidget(self.barcode_label)
-            layout.addWidget(QLabel("Product Name:"))
-            layout.addWidget(self.name_input)
-            layout.addWidget(QLabel("Stock:"))
-            layout.addWidget(self.stock_input)
-            layout.addWidget(QLabel("Location:"))
-            layout.addWidget(self.location_input)
-            layout.addWidget(QLabel("Equipment Group:"))
-            layout.addWidget(self.equipment_input)
-            layout.addWidget(self.save_button)
-
-            self.modify_widget.setLayout(layout)
-            self.main_layout.addWidget(self.modify_widget)
-            
-
-        except Exception as e:
-            print(f"❌ [ERROR] create_modify_page 실행 중 오류 발생: {e}")
-            QMessageBox.critical(self, "Error", f"An unexpected error occurred:\n{str(e)}")
-        
-        
-        
-        
-    def handle_save(self, barcode):
-        """✅ 입력된 정보를 데이터베이스에 저장"""
-        new_name = self.name_input.text().strip()
-        new_stock = self.stock_input.value()
-        new_location = self.location_input.text().strip()
-        new_equipment = self.equipment_input.text().strip()
-
-        if not new_name or not new_location or not new_equipment:
-            QMessageBox.warning(self, "Warning", "All fields must be filled out.")
-            return
-        
-        # 🔥 데이터베이스 업데이트 실행
-        database.modify_product(barcode, new_name, new_stock, new_location, new_equipment)
-
-        QMessageBox.information(self, "Success", "Product details updated successfully.")
-
-        # 🔄 수정 후 다시 수정/삭제 페이지로 돌아가기
-        self.return_to_dashboard()
-        
-        
-        
-        
-    def toggle_buttons(self):
-        """✔️ 테이블에서 행이 선택되었을 때 버튼 활성화"""
-        selected = self.results_table.selectionModel().hasSelection()
-        self.modify_button.setEnabled(selected)
-        self.delete_button.setEnabled(selected)
-
-
-
-
-
-    def return_to_dashboard(self):
-        """📌 수정 페이지에서 기존 UI(대시보드/인벤토리)로 복귀"""
-        try:
-            if hasattr(self, "modify_widget"):
-                self.modify_widget.setHidden(True)  # ✅ 수정 페이지 숨기기 (제거 X)
-                self.main_layout.removeWidget(self.modify_widget)
-                self.modify_widget.deleteLater()
-                self.modify_widget = None
-            
-            
-            self.refresh_dashboard_inventory()  # ✅ 데이터 새로고침
-            print("✅ [SUCCESS] 수정 후 기존 UI로 복귀 완료.")
-
-        except Exception as e:
-            print(f"❌ [ERROR] return_to_dashboard 실행 중 오류 발생: {e}")
-            QMessageBox.critical(self, "Error", f"An error occurred while returning to the previous page:\n{str(e)}")
-
-
+        qty = qty if mode == "in" else -qty
+        success, new_stock = database.update_stock(self.selected_barcode, qty)
+        if success:
+            self.show_message("Success", f"Updated stock: {new_stock}")
+            self.search_inventory()
+        else:
+            self.show_message("Error", "Failed to update stock", QMessageBox.Critical)
 
     def refresh_dashboard_inventory(self):
-        
+        products = database.get_all_products()
+        self.table.setRowCount(0)
+        for row_data in products:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            for col, val in enumerate(row_data):
+                self.table.setItem(row, col, QTableWidgetItem(str(val)))
+
+    def register_product(self):
+        barcode = self.reg_barcode.text()
+        Qcode = self.reg_Qcode.text()
+        description = self.reg_description.text()
+        stock = self.reg_stock.text()
+        location = self.reg_location.text()
+        group = self.reg_group.text()
         try:
-            self.table.setRowCount(0)  # ✅ 실제로 존재하는 테이블만 초기화
-            data = database.get_all_products()
+            result = database.add_product(barcode, Qcode, description, int(stock), location, group)
+            if result:
+                self.show_message("Success", "Product registered.")
+            else:
+                self.show_message("Failed", "Barcode already exists.", QMessageBox.Warning)
+        except:
+            self.show_message("Invalid", "Please check your inputs.", QMessageBox.Warning)
 
-            for row_idx, row_data in enumerate(data):
-                self.table.insertRow(row_idx)
-                for col_idx, value in enumerate(row_data):
-                    self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+    def search_product_for_modify(self):
+        keyword = self.mod_search.text().strip()
+        results = database.search_product(keyword)
+        self.mod_table.setRowCount(0)
+        for row_data in results:
+            row = self.mod_table.rowCount()
+            self.mod_table.insertRow(row)
+            for col, val in enumerate(row_data):
+                self.mod_table.setItem(row, col, QTableWidgetItem(str(val)))
 
-            print("✅ [SUCCESS] 대시보드 UI가 새로고침되었습니다.")
-        except Exception as e:
-            print(f"❌ [ERROR] refresh_dashboard_inventory 실행 중 오류 발생: {e}")
-            QMessageBox.critical(self, "Error", f"An error occurred while refreshing data:\\n{str(e)}")
+    def load_product_for_modify(self):
+        row = self.mod_table.currentRow()
+        if row >= 0:
+            self.selected_barcode = self.mod_table.item(row, 0).text()
+            self.mod_Qcode.setText(self.mod_table.item(row, 1).text())
+            self.mod_description.setText(self.mod_table.item(row, 2).text())
+            self.mod_stock.setText(self.mod_table.item(row, 3).text())
+            self.mod_location.setText(self.mod_table.item(row, 4).text())
+            self.mod_group.setText(self.mod_table.item(row, 5).text())
 
-            
-    def open_modify_delete_page(self):
-        """🔄 수정/삭제 페이지를 열기 (사이드 버튼 클릭 시 실행)"""
-        try:
-            self.setup_modify_delete()  # 수정/삭제 페이지 로드
-            print("✅ [SUCCESS] 수정/삭제 페이지가 정상적으로 로드되었습니다.")
+    def modify_product(self):
+        if not self.selected_barcode:
+            return
+        Qcode = self.mod_Qcode.text()
+        description = self.mod_description.text()
+        stock = int(self.mod_stock.text())
+        location = self.mod_location.text()
+        group = self.mod_group.text()
+        database.modify_product(self.selected_barcode, Qcode, description, stock, location, group)
+        self.search_product_for_modify()
 
-        except Exception as e:
-            print(f"❌ [ERROR] open_modify_delete_page 실행 중 오류 발생: {e}")
-            QMessageBox.critical(self, "Error", f"An error occurred while opening modify/delete page:\n{str(e)}")
-            
-    
+    def delete_product(self):
+        if not self.selected_barcode:
+            return
+        database.delete_product(self.selected_barcode)
+        self.search_product_for_modify()
 
+    def export_csv(self):
+        filename, _ = QFileDialog.getSaveFileName(self, "Save CSV", "", "CSV Files (*.csv)")
+        if filename:
+            success = database.export_inventory_to_csv(filename)
+            if success:
+                self.show_message("Success", "Exported successfully.")
+            else:
+                self.show_message("Error", "Export failed.", QMessageBox.Warning)
 
-
+    def import_csv_to_db(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
+        if filename:
+            try:
+                df = pd.read_csv(filename)
+                required_cols = ["Barcode", "Qcode", "Description", "Stock", "Location", "Equipment Group"]
+                if not all(col in df.columns for col in required_cols):
+                    self.show_message("Error", "CSV 열 이름이 정확하지 않습니다.", QMessageBox.Critical)
+                    return
+                for _, row in df.iterrows():
+                    database.add_product(
+                        str(row["Barcode"]), str(row["Qcode"]), str(row["Description"]),
+                        int(row["Stock"]), str(row["Location"]), str(row["Equipment Group"])
+                    )
+                self.refresh_dashboard_inventory()
+                self.show_message("Success", "CSV 파일을 DB로 가져왔습니다.")
+            except Exception as e:
+                self.show_message("Error", f"가져오기 실패: {e}", QMessageBox.Critical)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
