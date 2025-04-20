@@ -1,11 +1,21 @@
 import sys
 import database
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QFont
 from inventory import InventoryApp
 
 def run_app():
     database.init_db()
     app = QApplication(sys.argv)         # ✅ 항상 QApplication 먼저
+    app.setStyleSheet("""
+        QMessageBox {
+            font-size: 14pt;
+            font-family: '삼성긴고딕';
+        }
+    """)
+
+    # ✅ 전체 앱 폰트 설정도 같이 가능
+    app.setFont(QFont("삼성긴고딕 Medium", 9))
     window = InventoryApp()              # ✅ 그다음 GUI 생성
     window.show()
     sys.exit(app.exec_())                # ✅ 이벤트 루프 시작
