@@ -196,7 +196,7 @@ def export_inventory_to_csv(filename):
         # CSV 파일 작성
         with open(filename, 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Barcode", "Qcode", "Description", "Stock", "Location", "Equipment Group"])  # 헤더 추가
+            writer.writerow(["Barcode", "Qcode", "Description", "Stock", "Location", "EQP Group"])  # 헤더 추가
             writer.writerows(products)  # 데이터 추가
         
         conn.close()
