@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont, QIntValidator
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QIcon 
 
 
 class InventoryApp(QMainWindow):
@@ -16,6 +17,8 @@ class InventoryApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("STOCK MANAGER")
         self.setGeometry(100, 100, 2600, 1400)
+
+        self.setWindowIcon(QIcon("icon.ico"))  # ✅ 아이콘 설정
         self.selected_barcode = None
            # ✅ 여기서 전체 스타일시트 한 번에 적용
         self.setStyleSheet("""
@@ -470,6 +473,7 @@ class InventoryApp(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("icon.ico"))  # ✅ 여기에도 아이콘 설정 추가
     window = InventoryApp()
     window.show()
     sys.exit(app.exec_())
