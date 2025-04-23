@@ -247,7 +247,7 @@ class InventoryApp(QMainWindow):
         self.reg_location = QLineEdit()
         self.reg_location.setPlaceholderText("Enter Location")
         self.reg_group = QComboBox()
-        self.reg_group.setPlaceholderText("Select Equipment Group")
+        self.reg_group.setPlaceholderText("Select EQP Group")
         self.reg_group.addItems([
             "LAM(ALD)", "LAM(HDP)", "IPS(ALD)", "IPS(SION, ASI)",
             "IPS(ABAS)", "TEL(TOSZ)", "SEMES(TOSZ)", "ORING & ETC"
@@ -264,13 +264,15 @@ class InventoryApp(QMainWindow):
         layout.addWidget(QLabel("Description")); layout.addWidget(self.reg_description)
         layout.addWidget(QLabel("Stock")); layout.addWidget(self.reg_stock)
         layout.addWidget(QLabel("Location")); layout.addWidget(self.reg_location)
-        layout.addWidget(QLabel("Equipment Group")); layout.addWidget(self.reg_group)
+        layout.addWidget(QLabel("EQP Group")); layout.addWidget(self.reg_group)
 
         layout.addStretch()  # ✅ 위 폼과 아래 버튼 사이에 공간 확보
 
         self.reg_button = QPushButton("Register")
         self.reg_button.setFixedHeight(100)
+        self.reg_button.clicked.connect(self.register_product)
         layout.addWidget(self.reg_button)
+        
 
         # ✅ 간격 조정
         layout.setSpacing(15)
@@ -302,7 +304,7 @@ class InventoryApp(QMainWindow):
         self.mod_group.setFixedHeight(60)
         self.mod_group.addItems(["LAM(ALD)", "LAM(HDP)", "IPS(ALD)", "IPS(SION, ASI)",
             "IPS(ABAS)", "TEL(TOSZ)", "SEMES(TOSZ)" , "ORING & ETC"])
-        self.mod_group.setPlaceholderText("Select Equipment Group")
+        self.mod_group.setPlaceholderText("Select EQP Group")
         self.mod_group.setStyleSheet("QComboBox { padding: 10px; }")
         self.mod_button.clicked.connect(self.search_product_for_modify)
         self.save_button = QPushButton("Save")
@@ -321,7 +323,7 @@ class InventoryApp(QMainWindow):
         layout.addWidget(QLabel("Description")); layout.addWidget(self.mod_description)
         layout.addWidget(QLabel("Stock")); layout.addWidget(self.mod_stock)
         layout.addWidget(QLabel("Location")); layout.addWidget(self.mod_location)
-        layout.addWidget(QLabel("Group")); layout.addWidget(self.mod_group)
+        layout.addWidget(QLabel("EQP Group")); layout.addWidget(self.mod_group)
         layout.addWidget(self.save_button)
         layout.addWidget(self.delete_button)
 
@@ -448,15 +450,16 @@ class InventoryApp(QMainWindow):
         filename, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
         if filename:
             try:
-                df = pd.read_csv(filename)
-                required_cols = ["Barcode", "Qcode", "Description", "Stock", "Location", "Equipment Group"]
+                df = pd.read_csv(filename,encoding="euc-kr")
+                required_cols = ["Barcode", "Qcode", "Description", "Stock", "Location", "EQP Group"]
+                df = df[required_cols]
                 if not all(col in df.columns for col in required_cols):
                     self.show_message("Error", "CSV 열 이름이 정확하지 않습니다.", QMessageBox.Critical)
                     return
                 for _, row in df.iterrows():
                     database.add_product(
                         str(row["Barcode"]), str(row["Qcode"]), str(row["Description"]),
-                        int(row["Stock"]), str(row["Location"]), str(row["Equipment Group"])
+                        int(row["Stock"]), str(row["Location"]), str(row["EQP Group"])
                     )
                 self.refresh_dashboard_inventory()
                 self.show_message("Success", "CSV 파일을 DB로 가져왔습니다.")
