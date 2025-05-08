@@ -2,6 +2,9 @@
 import sys
 import database
 import pandas as pd
+import chardet
+import io
+import os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QStackedWidget, QTableWidget,QDialog ,QTableWidgetItem,QHeaderView, QComboBox, QMessageBox, QFileDialog
@@ -16,7 +19,7 @@ class InventoryApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("STOCK MANAGER")
-        self.setGeometry(100, 100, 2600, 1400)
+        self.setGeometry(100, 100, 1600, 900)
 
         self.setWindowIcon(QIcon("icon.ico"))  # ✅ 아이콘 설정
         self.selected_barcode = None
@@ -441,33 +444,49 @@ class InventoryApp(QMainWindow):
         self.search_product_for_modify()
 
     def export_csv(self):
-        filename, _ = QFileDialog.getSaveFileName(self, "Save CSV", "", "CSV Files (*.csv)")
-        if filename:
-            success = database.export_inventory_to_csv(filename)
-            if success:
-                self.show_message("Success", "Exported successfully.")
-            else:
-                self.show_message("Error", "Export failed.", QMessageBox.Warning)
+          # 🔹 저장 경로 및 파일명 고정
+        export_dir = r"C:\inventory"
+        os.makedirs(export_dir, exist_ok=True)  # 경로 없으면 생성
 
+        filename = os.path.join(export_dir, "inventory_export.csv")
+
+        # 🔹 바로 저장 실행
+        success = database.export_inventory_to_csv(filename)
+
+        if success:
+            self.show_message("Success", f"✅ CSV 자동 저장 완료:\n{filename}")
+        else:
+            self.show_message("Error", "Export failed.", QMessageBox.Warning)
+                    
     def import_csv_to_db(self):
-        filename, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
-        if filename:
-            try:
-                df = pd.read_csv(filename,encoding="euc-kr")
-                required_cols = ["Barcode", "Qcode", "Description", "Stock", "Location", "EQP Group"]
-                df = df[required_cols]
-                if not all(col in df.columns for col in required_cols):
-                    self.show_message("Error", "CSV 열 이름이 정확하지 않습니다.", QMessageBox.Critical)
-                    return
-                for _, row in df.iterrows():
-                    database.add_product(
-                        str(row["Barcode"]), str(row["Qcode"]), str(row["Description"]),
-                        int(row["Stock"]), str(row["Location"]), str(row["EQP Group"])
-                    )
-                self.refresh_dashboard_inventory()
-                self.show_message("Success", "CSV 파일을 DB로 가져왔습니다.")
-            except Exception as e:
-                self.show_message("Error", f"가져오기 실패: {e}", QMessageBox.Critical)
+            filename, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
+            if filename:
+                try:
+                    encodings = ['utf-8-sig', 'utf-8', 'cp949', 'euc-kr', 'ISO-8859-1', 'latin1']
+                    for enc in encodings:
+                        try:
+                            df = pd.read_csv(filename, encoding=enc, quotechar='"', on_bad_lines='skip')
+                            print(f"✅ 인코딩 성공: {enc}")
+                            break
+                        except Exception as e:
+                            print(f"{enc} 실패: {e}")
+                    else:
+                        raise Exception("모든 인코딩 실패")
+                    df = pd.read_csv(filename,encoding="ISO-8859-1",sep=",", quotechar='"', on_bad_lines='skip')
+                    required_cols = ["Barcode", "Qcode", "Description", "Stock", "Location", "EQP Group"]
+                    df = df[required_cols]
+                    if not all(col in df.columns for col in required_cols):
+                        self.show_message("Error", "CSV 열 이름이 정확하지 않습니다.", QMessageBox.Critical)
+                        return
+                    for _, row in df.iterrows():
+                        database.add_product(
+                            str(row["Barcode"]), str(row["Qcode"]), str(row["Description"]),
+                            int(row["Stock"]), str(row["Location"]), str(row["EQP Group"])
+                        )
+                    self.refresh_dashboard_inventory()
+                    self.show_message("Success", "CSV 파일을 DB로 가져왔습니다.")
+                except Exception as e:
+                    self.show_message("Error", f"가져오기 실패: {e}", QMessageBox.Critical)
 
     
 
