@@ -1,0 +1,21 @@
+import sqlite3
+import pandas as pd
+
+df = pd.read_clipboard()
+
+
+  df.head()
+
+
+  # 🔹 SQLite 연결
+conn = sqlite3.connect("inventory.db")
+cursor = conn.cursor()
+
+
+  # 🔹 기존 테이블 데이터 삭제
+cursor.execute("DELETE FROM inventory;")
+conn.commit()
+
+
+  # 🔹 데이터 프레임 → DB로 넣기
+df.to_sql("inventory", conn, if_exists="append", index=False)
