@@ -1,0 +1,510 @@
+
+import sys
+import database
+import pandas as pd
+
+import io
+import os
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QSizePolicy,
+    QLineEdit, QStackedWidget, QTableWidget,QDialog ,QTableWidgetItem,QHeaderView, QComboBox, QMessageBox, QFileDialog
+)
+from PyQt5.QtGui import QFont, QIntValidator
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QIcon 
+
+
+class InventoryApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("STOCK MANAGER")
+        self.showFullScreen()
+
+        self.setWindowIcon(QIcon("icon.ico"))  # ✅ 아이콘 설정
+        self.selected_barcode = None
+           # ✅ 여기서 전체 스타일시트 한 번에 적용
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #F9FAFB;
+                font-family: SamsungOne;
+                color: #333333;
+            }
+
+            QPushButton {
+                background-color: #2D9CDB;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13pt;
+            }
+
+            QPushButton:hover {
+                background-color: #1B7DBF;
+            }
+
+            QLineEdit, QComboBox {
+                background-color: white;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 10pt;
+            }
+
+            QLabel {
+                font-size: 12pt;
+            }
+
+            QTableWidget {
+                background-color: white;
+                gridline-color: #ccc;
+                font-size: 10pt;
+            }
+
+            QHeaderView::section {
+                background-color: #E4E7EB;
+                font-weight: bold;
+                font-size: 11pt;
+                padding: 6px;
+                border: none;
+            }
+        """)
+
+        self.central_widget = QWidget()
+        self.central_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
+
+        self.title_label = QLabel("STOCK MANAGER")
+        self.title_label.setStyleSheet("""
+    font-size: 28pt;
+    font-weight: bold;
+    color: #2D9CDB;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #2D9CDB;
+""")
+
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.main_layout.addWidget(self.title_label)
+
+        self.body_layout = QHBoxLayout()
+        self.main_layout.addLayout(self.body_layout)
+        self.main_layout.addStretch()
+
+        self.sidebar_layout = QVBoxLayout()
+        self.sidebar_layout.setSpacing(1)
+        self.sidebar_widget = QWidget()
+        self.sidebar_widget.setLayout(self.sidebar_layout)
+        self.sidebar_widget.setFixedWidth(500)  # ✅ 사이드바 너비 고정
+        
+        self.pages = QStackedWidget()
+
+        self.body_layout.addWidget(self.sidebar_widget)
+        self.body_layout.addWidget(self.pages, 5)
+
+        # 페이지들 선언
+        self.dashboard_inventory_page = QWidget()
+        self.registration_page = QWidget()
+        self.modify_delete_page = QWidget()
+        self.import_export_page = QWidget()
+
+        self.pages.addWidget(self.dashboard_inventory_page)  # index 0
+        self.pages.addWidget(self.registration_page)         # index 1
+        self.pages.addWidget(self.modify_delete_page)        # index 2
+        self.pages.addWidget(self.import_export_page)               # index 3
+        self.pages.addWidget(self.import_export_page)               # index 4
+
+        self.add_sidebar_button("Dashboard / Stock Update", 0)
+        self.add_sidebar_button("Product Registration", 1)
+        self.add_sidebar_button("Info Modify / Delete", 2)
+        self.add_sidebar_button("Import / Export CSV", 3)
+
+        self.setup_dashboard_inventory()
+        self.setup_registration_page()
+        self.setup_modify_delete_page()
+        self.setup_import_export_page()
+
+    def add_sidebar_button(self, name, index):
+        button = QPushButton(name)
+        def handle_click():
+            self.pages.setCurrentIndex(index)
+            if index == 0:
+                self.refresh_dashboard_inventory()  # ✅ Dashboard 선택 시 테이블 갱신
+
+        button.clicked.connect(handle_click)
+        self.sidebar_layout.addWidget(button)
+        button.setFixedHeight(90)
+        button.setStyleSheet("""
+            QPushButton {
+                background-color: #E4E7EB;
+                color: black;
+                border: none;
+                padding: 5px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #005bb5;
+            }
+        """)
+    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+
+    from PyQt5.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
+    from PyQt5.QtCore import Qt
+    
+   
+    
+    def show_message(self, title, text, icon=None):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setFixedSize(420, 180)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #ffffff;
+                border-radius: 15px;
+            }
+            QLabel {
+                font-size: 16px;
+                padding: 10px;
+                min-height: 40px;
+            }
+            QPushButton {
+                font-size: 14px;
+                padding: 6px 20px;
+                border-radius: 10px;
+                background-color: #0078d7;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #005bb5;
+            }
+        """)
+
+        layout = QVBoxLayout(dialog)
+        label = QLabel(text)
+        label.setAlignment(Qt.AlignCenter)
+        label.setWordWrap(True)
+
+        btn_layout = QHBoxLayout()
+        ok_btn = QPushButton("확인")
+        ok_btn.clicked.connect(dialog.accept)
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addStretch()
+
+        layout.addWidget(label)
+        layout.addLayout(btn_layout)
+        dialog.exec_()
+    
+
+
+
+
+    def setup_dashboard_inventory(self):
+        layout = QVBoxLayout(self.dashboard_inventory_page)
+        search_layout = QHBoxLayout()
+        self.search_input = QLineEdit()
+        self.search_input.setFixedHeight(60)
+        self.search_input.setPlaceholderText("Search by barcode or Qcode")
+        self.search_button = QPushButton("🔍Search ")
+        self.search_button.setFixedHeight(60)
+        self.search_button.clicked.connect(self.search_inventory)
+        self.search_input.returnPressed.connect(self.search_inventory)  # ✅ Enter 키 입력 시 검색 실행
+        search_layout.addWidget(self.search_input)
+        search_layout.addWidget(self.search_button)
+
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Barcode", "Qcode", "Description", "Stock", "Location", "EQP Group"])
+        self.table.itemSelectionChanged.connect(self.load_selected_product)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)  # 🔥 열이 테이블 전체 너비를 가득 채우도록 설정
+        # ✅ 이후 인터랙티브로 바꿔주는 타이머 사용
+        QTimer.singleShot(100, lambda: header.setSectionResizeMode(QHeaderView.Interactive))
+
+        self.quantity_input = QLineEdit()
+        self.quantity_input.setFixedHeight(60)
+        self.quantity_input.setPlaceholderText("Enter quantity")
+        self.quantity_input.setValidator(QIntValidator(1, 9999))
+        self.in_button = QPushButton("+ IN")
+        self.in_button.setFixedHeight(60)
+        self.out_button = QPushButton("- OUT")
+        self.out_button.setFixedHeight(60)
+        self.in_button.clicked.connect(lambda: self.update_stock("in"))
+        self.out_button.clicked.connect(lambda: self.update_stock("out"))
+
+        action_layout = QHBoxLayout()
+        action_layout.addWidget(self.in_button)
+        action_layout.addWidget(self.out_button)
+
+        layout.addLayout(search_layout)
+        layout.addWidget(self.table)
+        layout.addWidget(self.quantity_input)
+        layout.addLayout(action_layout)
+        self.refresh_dashboard_inventory()
+
+    def setup_registration_page(self):
+        # ✅ 등록 페이지
+        layout = QVBoxLayout(self.registration_page)
+        layout.setAlignment(Qt.AlignTop)
+        layout.setSpacing(20)
+
+        self.reg_barcode = QLineEdit()
+        self.reg_barcode.setPlaceholderText("Enter Barcode")
+        self.reg_Qcode = QLineEdit()
+        self.reg_Qcode.setPlaceholderText("Enter Qcode")
+        self.reg_description = QLineEdit()
+        self.reg_description.setPlaceholderText("Enter Description")
+        self.reg_stock = QLineEdit()
+        self.reg_stock.setPlaceholderText("Enter Stock")
+        self.reg_location = QLineEdit()
+        self.reg_location.setPlaceholderText("Enter Location")
+        self.reg_group = QComboBox()
+        self.reg_group.setPlaceholderText("Select EQP Group")
+        self.reg_group.addItems([
+            "LAM(ALD)", "LAM(HDP)", "IPS(ALD)", "IPS(SION, ASI)",
+            "IPS(ABAS)", "TEL(TOSZ)", "SEMES(TOSZ)", "ORING & ETC"
+        ])
+
+        for widget in [self.reg_barcode, self.reg_Qcode, self.reg_description,
+                    self.reg_stock, self.reg_location, self.reg_group]:
+            widget.setFixedHeight(60)
+
+
+        # 🔽 위아래로 정렬된 폼
+        layout.addWidget(QLabel("Barcode")); layout.addWidget(self.reg_barcode)
+        layout.addWidget(QLabel("Qcode")); layout.addWidget(self.reg_Qcode)
+        layout.addWidget(QLabel("Description")); layout.addWidget(self.reg_description)
+        layout.addWidget(QLabel("Stock")); layout.addWidget(self.reg_stock)
+        layout.addWidget(QLabel("Location")); layout.addWidget(self.reg_location)
+        layout.addWidget(QLabel("EQP Group")); layout.addWidget(self.reg_group)
+
+        layout.addStretch()  # ✅ 위 폼과 아래 버튼 사이에 공간 확보
+
+        self.reg_button = QPushButton("Register")
+        self.reg_button.setFixedHeight(100)
+        self.reg_button.clicked.connect(self.register_product)
+        layout.addWidget(self.reg_button)
+        
+
+        # ✅ 간격 조정
+        layout.setSpacing(15)
+
+    def setup_modify_delete_page(self):
+        layout = QVBoxLayout(self.modify_delete_page)
+        self.mod_search = QLineEdit()
+        self.mod_search.setFixedHeight(60)
+        self.mod_search.setPlaceholderText("Search product")
+        self.mod_button = QPushButton("Search")
+        self.mod_button.setFixedHeight(60)
+        self.mod_button.clicked.connect(self.search_product_for_modify)
+        self.mod_table = QTableWidget(0, 6)
+        self.mod_table.setHorizontalHeaderLabels(["Barcode", "Qcode", "Description", "Stock", "Location", "Group"])
+        header = self.mod_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)  # 🔥 열이 테이블 전체 너비를 가득 채우도록 설정
+        
+        self.mod_table.itemSelectionChanged.connect(self.load_product_for_modify)
+
+        self.mod_Qcode = QLineEdit()
+        self.mod_Qcode.setFixedHeight(60) 
+        self.mod_description = QLineEdit()
+        self.mod_description.setFixedHeight(60)
+        self.mod_stock = QLineEdit()
+        self.mod_stock.setFixedHeight(60)
+        self.mod_location = QLineEdit()
+        self.mod_location.setFixedHeight(60)
+        self.mod_group = QComboBox()
+        self.mod_group.setFixedHeight(60)
+        self.mod_group.addItems(["LAM(ALD)", "LAM(HDP)", "IPS(ALD)", "IPS(SION, ASI)",
+            "IPS(ABAS)", "TEL(TOSZ)", "SEMES(TOSZ)" , "ORING & ETC"])
+        self.mod_group.setPlaceholderText("Select EQP Group")
+        self.mod_group.setStyleSheet("QComboBox { padding: 10px; }")
+        self.mod_button.clicked.connect(self.search_product_for_modify)
+        self.save_button = QPushButton("Save")
+        self.save_button.setFixedHeight(60)
+        self.delete_button = QPushButton("Delete")
+        self.delete_button.setFixedHeight(60)
+        self.save_button.clicked.connect(self.modify_product)
+        self.delete_button.clicked.connect(self.delete_product)
+
+        
+
+        layout.addWidget(self.mod_search)
+        layout.addWidget(self.mod_button)
+        layout.addWidget(self.mod_table)
+        layout.addWidget(QLabel("Qcode")); layout.addWidget(self.mod_Qcode)
+        layout.addWidget(QLabel("Description")); layout.addWidget(self.mod_description)
+        layout.addWidget(QLabel("Stock")); layout.addWidget(self.mod_stock)
+        layout.addWidget(QLabel("Location")); layout.addWidget(self.mod_location)
+        layout.addWidget(QLabel("EQP Group")); layout.addWidget(self.mod_group)
+        layout.addWidget(self.save_button)
+        layout.addWidget(self.delete_button)
+
+         
+
+    
+    def setup_import_export_page(self):
+        layout = QVBoxLayout(self.import_export_page)
+
+        import_btn = QPushButton("Import CSV to DB")
+        import_btn.setFixedHeight(80)
+        import_btn.clicked.connect(self.import_csv_to_db)
+
+        export_btn = QPushButton("Export DB to CSV")
+        export_btn.setFixedHeight(80)
+        export_btn.clicked.connect(self.export_csv)
+
+        layout.addWidget(import_btn)
+        layout.addWidget(export_btn)
+    def search_inventory(self):
+        keyword = self.search_input.text().strip()
+        results = database.search_product(keyword)
+        self.table.setRowCount(0)
+        for row_data in results:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            for col, val in enumerate(row_data):
+                self.table.setItem(row, col, QTableWidgetItem(str(val)))
+
+    def load_selected_product(self):
+        row = self.table.currentRow()
+        if row >= 0:
+            self.selected_barcode = self.table.item(row, 0).text()
+
+    def update_stock(self, mode):
+        if not self.selected_barcode:
+            self.show_message("Warning", "Select a product first", QMessageBox.Warning)
+            return
+        try:
+            qty = int(self.quantity_input.text())
+        except:
+            self.show_message("Invalid", "Enter a valid quantity", QMessageBox.Warning)
+            return
+        qty = qty if mode == "in" else -qty
+        success, new_stock = database.update_stock(self.selected_barcode, qty)
+        if success:
+            self.show_message("Success", f"Updated stock: {new_stock}")
+            self.search_inventory()
+        else:
+            self.show_message("Error", "Failed to update stock", QMessageBox.Critical)
+
+    def refresh_dashboard_inventory(self):
+        products = database.get_all_products()
+        self.table.setRowCount(0)
+        for row_data in products:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            for col, val in enumerate(row_data):
+                self.table.setItem(row, col, QTableWidgetItem(str(val)))
+
+    def register_product(self):
+        barcode = self.reg_barcode.text()
+        Qcode = self.reg_Qcode.text()
+        description = self.reg_description.text()
+        stock = self.reg_stock.text()
+        location = self.reg_location.text()
+        group = self.reg_group.currentText()
+        try:
+            result = database.add_product(barcode, Qcode, description, int(stock), location, group)
+            if result:
+                self.show_message("Success", "Product registered.")
+            else:
+                self.show_message("Failed", "Barcode already exists.", QMessageBox.Warning)
+        except:
+            self.show_message("Invalid", "Please check your inputs.", QMessageBox.Warning)
+
+    def search_product_for_modify(self):
+        keyword = self.mod_search.text().strip()
+        results = database.search_product(keyword)
+        self.mod_table.setRowCount(0)
+        for row_data in results:
+            row = self.mod_table.rowCount()
+            self.mod_table.insertRow(row)
+            for col, val in enumerate(row_data):
+                self.mod_table.setItem(row, col, QTableWidgetItem(str(val)))
+
+    def load_product_for_modify(self):
+        row = self.mod_table.currentRow()
+        if row >= 0:
+            self.selected_barcode = self.mod_table.item(row, 0).text()
+            self.mod_Qcode.setText(self.mod_table.item(row, 1).text())
+            self.mod_description.setText(self.mod_table.item(row, 2).text())
+            self.mod_stock.setText(self.mod_table.item(row, 3).text())
+            self.mod_location.setText(self.mod_table.item(row, 4).text())
+            self.mod_group.setCurrentText(self.mod_table.item(row, 5).text())
+
+    def modify_product(self):
+        if not self.selected_barcode:
+            return
+        Qcode = self.mod_Qcode.text()
+        description = self.mod_description.text()
+        stock = int(self.mod_stock.text())
+        location = self.mod_location.text()
+        group = self.mod_group.currentText()
+        database.modify_product(self.selected_barcode, Qcode, description, stock, location, group)
+        self.search_product_for_modify()
+
+    def delete_product(self):
+        if not self.selected_barcode:
+            return
+        database.delete_product(self.selected_barcode)
+        self.search_product_for_modify()
+
+    def export_csv(self):
+          # 🔹 저장 경로 및 파일명 고정
+        export_dir = r"C:\inventory"
+        os.makedirs(export_dir, exist_ok=True)  # 경로 없으면 생성
+
+        filename = os.path.join(export_dir, "inventory_export.csv")
+
+        # 🔹 바로 저장 실행
+        success = database.export_inventory_to_csv(filename)
+
+        if success:
+            self.show_message("Success", f"✅ CSV 자동 저장 완료:\n{filename}")
+        else:
+            self.show_message("Error", "Export failed.", QMessageBox.Warning)
+                    
+    def import_csv_to_db(self):
+            filename, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
+            if filename:
+                try:
+                    encodings = ['utf-8-sig', 'utf-8', 'cp949', 'euc-kr', 'ISO-8859-1', 'latin1']
+                    for enc in encodings:
+                        try:
+                            df = pd.read_csv(filename, encoding=enc, quotechar='"', on_bad_lines='skip')
+                            print(f"✅ 인코딩 성공: {enc}")
+                            break
+                        except Exception as e:
+                            print(f"{enc} 실패: {e}")
+                    else:
+                        raise Exception("모든 인코딩 실패")
+                    df = pd.read_csv(filename,encoding="ISO-8859-1",sep=",", quotechar='"', on_bad_lines='skip')
+                    required_cols = ["Barcode", "Qcode", "Description", "Stock", "Location", "EQP Group"]
+                    df = df[required_cols]
+                    if not all(col in df.columns for col in required_cols):
+                        self.show_message("Error", "CSV 열 이름이 정확하지 않습니다.", QMessageBox.Critical)
+                        return
+                    for _, row in df.iterrows():
+                        database.add_product(
+                            str(row["Barcode"]), str(row["Qcode"]), str(row["Description"]),
+                            int(row["Stock"]), str(row["Location"]), str(row["EQP Group"])
+                        )
+                    self.refresh_dashboard_inventory()
+                    self.show_message("Success", "CSV 파일을 DB로 가져왔습니다.")
+                except Exception as e:
+                    self.show_message("Error", f"가져오기 실패: {e}", QMessageBox.Critical)
+
+    
+
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.showNormal()
+            self.setGeometry(100, 100, 1800, 900)
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("icon.ico"))  # ✅ 여기에도 아이콘 설정 추가
+    window = InventoryApp()
+    window.show()
+    sys.exit(app.exec_())
