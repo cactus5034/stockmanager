@@ -18,6 +18,27 @@ def init_db():
     conn.commit()
     conn.close()
 
+
+import os
+import sys
+
+# 데이터베이스 초기화 함수
+def init_db():
+    conn = sqlite3.connect("inventory.db")
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS inventory (
+            barcode TEXT PRIMARY KEY,
+            qcode TEXT,
+            description TEXT,
+            stock INTEGER,
+            location TEXT,
+            equipment_group TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
 def connect_db():
     return sqlite3.connect("inventory.db")
 
@@ -46,16 +67,17 @@ def add_product(barcode, qcode, description, stock, location, equipment_group):
 
 # 모든 상품 가져오기
 def get_all_products():
-    """✅ DB에서 모든 제품 불러오기"""
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT barcode, qcode, description, stock, location, equipment_group FROM inventory")
-    products = cursor.fetchall()
-    
-    print(f"📦 DB에서 가져온 데이터: {products}")  # ✅ 디버깅 로그 추가 (DB 데이터 확인)
-    
-    conn.close()
-    return products
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT barcode, qcode, description, stock, location, equipment_group FROM inventory")
+        products = cursor.fetchall()
+        conn.close()
+        return products
+    except Exception as e:
+        print(f"[ERROR] Failed to load products: {e}")
+        return []  # ❗ 에러 시 빈 리스트 반환
+
 
 
 def update_stock(barcode, amount):
@@ -112,24 +134,30 @@ import sqlite3
 
 def search_product(search_text):
     """📦 바코드 또는 제품명에 포함된 텍스트로 검색하여 모든 정보 반환"""
-    conn = sqlite3.connect("inventory.db")
-    cursor = conn.cursor()
-    
-    query = """
-    SELECT barcode, qcode, description, stock, location, equipment_group 
-    FROM inventory 
-    WHERE CAST(barcode AS TEXT) LIKE ? OR qcode LIKE ?
-    """  # 🔥 직접 문자열 삽입하여 LIKE 검색 오류 해결
-
     try:
+        conn = sqlite3.connect("inventory.db")
+        cursor = conn.cursor()
+        
+        # ✅ inventory 테이블 존재 여부 체크
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='inventory'")
+        if not cursor.fetchone():
+            print("⚠️ [WARNING] inventory 테이블이 존재하지 않음.")
+            return []
+
+        # ✅ 정상 쿼리 실행
+        query = """
+        SELECT barcode, qcode, description, stock, location, equipment_group 
+        FROM inventory 
+        WHERE CAST(barcode AS TEXT) LIKE ? OR qcode LIKE ?
+        """
         cursor.execute(query, (f"%{search_text}%", f"%{search_text}%"))
         results = cursor.fetchall()
-    except sqlite3.OperationalError as e:
+        conn.close()
+        return results
+
+    except sqlite3.Error as e:
         print(f"❌ [ERROR] SQL 실행 중 오류 발생: {e}")
-        results = []
-    
-    conn.close()
-    return results  # 여러 개의 검색 결과 반환
+        return []  # 에러 시 빈 리스트 반환
 
 
 
