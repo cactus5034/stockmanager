@@ -15,13 +15,15 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtGui import QIcon 
 
 
+
+
 class InventoryApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("STOCK MANAGER")
         self.showFullScreen()
 
-        self.setWindowIcon(QIcon("icon.ico"))  # ✅ 아이콘 설정
+        self.setWindowIcon(QIcon(("icon.ico")))  # ✅ 아이콘 설정
         self.selected_barcode = None
            # ✅ 여기서 전체 스타일시트 한 번에 적용
         self.setStyleSheet("""
@@ -157,14 +159,15 @@ class InventoryApp(QMainWindow):
     def show_message(self, title, text, icon=None):
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
-        dialog.setFixedSize(420, 180)
+        dialog.setFixedSize(700, 180)
         dialog.setStyleSheet("""
             QDialog {
                 background-color: #ffffff;
                 border-radius: 15px;
+                font-size: 16px;
             }
             QLabel {
-                font-size: 16px;
+                font-size: 25px;
                 padding: 10px;
                 min-height: 40px;
             }
@@ -240,6 +243,8 @@ class InventoryApp(QMainWindow):
         layout.addWidget(self.table)
         layout.addWidget(self.quantity_input)
         layout.addLayout(action_layout)
+
+        
         self.refresh_dashboard_inventory()
 
     def setup_registration_page(self):
@@ -342,18 +347,19 @@ class InventoryApp(QMainWindow):
          
 
     
+    
     def setup_import_export_page(self):
         layout = QVBoxLayout(self.import_export_page)
 
-        import_btn = QPushButton("Import CSV to DB")
-        import_btn.setFixedHeight(80)
-        import_btn.clicked.connect(self.import_csv_to_db)
+        paste_btn = QPushButton("📋 Paste Clipboard to DB")
+        paste_btn.setFixedHeight(80)
+        paste_btn.clicked.connect(self.paste_clipboard_to_db)
 
         export_btn = QPushButton("Export DB to CSV")
         export_btn.setFixedHeight(80)
         export_btn.clicked.connect(self.export_csv)
 
-        layout.addWidget(import_btn)
+        layout.addWidget(paste_btn)
         layout.addWidget(export_btn)
     def search_inventory(self):
         keyword = self.search_input.text().strip()
@@ -463,36 +469,6 @@ class InventoryApp(QMainWindow):
             self.show_message("Success", f"✅ CSV 자동 저장 완료:\n{filename}")
         else:
             self.show_message("Error", "Export failed.", QMessageBox.Warning)
-                    
-    def import_csv_to_db(self):
-            filename, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
-            if filename:
-                try:
-                    encodings = ['utf-8-sig', 'utf-8', 'cp949', 'euc-kr', 'ISO-8859-1', 'latin1']
-                    for enc in encodings:
-                        try:
-                            df = pd.read_csv(filename, encoding=enc, quotechar='"', on_bad_lines='skip')
-                            print(f"✅ 인코딩 성공: {enc}")
-                            break
-                        except Exception as e:
-                            print(f"{enc} 실패: {e}")
-                    else:
-                        raise Exception("모든 인코딩 실패")
-                    df = pd.read_csv(filename,encoding="ISO-8859-1",sep=",", quotechar='"', on_bad_lines='skip')
-                    required_cols = ["Barcode", "Qcode", "Description", "Stock", "Location", "EQP Group"]
-                    df = df[required_cols]
-                    if not all(col in df.columns for col in required_cols):
-                        self.show_message("Error", "CSV 열 이름이 정확하지 않습니다.", QMessageBox.Critical)
-                        return
-                    for _, row in df.iterrows():
-                        database.add_product(
-                            str(row["Barcode"]), str(row["Qcode"]), str(row["Description"]),
-                            int(row["Stock"]), str(row["Location"]), str(row["EQP Group"])
-                        )
-                    self.refresh_dashboard_inventory()
-                    self.show_message("Success", "CSV 파일을 DB로 가져왔습니다.")
-                except Exception as e:
-                    self.show_message("Error", f"가져오기 실패: {e}", QMessageBox.Critical)
 
     
 
@@ -501,6 +477,25 @@ class InventoryApp(QMainWindow):
         if event.key() == Qt.Key_Escape:
             self.showNormal()
             self.setGeometry(100, 100, 1800, 900)
+
+
+    def paste_clipboard_to_db(self):
+        from PyQt5.QtWidgets import QApplication
+        clipboard = QApplication.clipboard()
+        data = clipboard.text()
+        rows = data.strip().split('\n')
+        for row in rows:
+            parts = row.strip().split('\t')
+            if len(parts) == 6:
+                barcode, qcode, description, stock, location, eqp_group = [p.strip() for p in parts]
+                try:
+                    stock = int(stock)
+                    database.add_product(barcode, qcode, description, stock, location, eqp_group)
+                except ValueError:
+                    continue
+        self.refresh_dashboard_inventory()
+        self.show_message("Success", "Clipboard data imported to DB.")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
