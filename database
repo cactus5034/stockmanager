@@ -12,28 +12,7 @@ def init_db():
             description TEXT,
             stock INTEGER,
             location TEXT,
-            equipment_group TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-
-import os
-import sys
-
-# 데이터베이스 초기화 함수
-def init_db():
-    conn = sqlite3.connect("inventory.db")
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS inventory (
-            barcode TEXT PRIMARY KEY,
-            qcode TEXT,
-            description TEXT,
-            stock INTEGER,
-            location TEXT,
-            equipment_group TEXT
+            equipment_group TEXT 
         )
     """)
     conn.commit()
