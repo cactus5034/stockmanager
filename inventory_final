@@ -480,9 +480,17 @@ class InventoryApp(QMainWindow):
 
 
     def paste_clipboard_to_db(self):
-        from PyQt5.QtWidgets import QApplication
         clipboard = QApplication.clipboard()
         data = clipboard.text()
+
+        # ✅ 기존 데이터 전체 삭제
+        conn = database.connect_db()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM inventory")
+        conn.commit()
+        conn.close()
+
+        # ✅ 새로운 데이터 삽입
         rows = data.strip().split('\n')
         for row in rows:
             parts = row.strip().split('\t')
@@ -493,8 +501,11 @@ class InventoryApp(QMainWindow):
                     database.add_product(barcode, qcode, description, stock, location, eqp_group)
                 except ValueError:
                     continue
+
         self.refresh_dashboard_inventory()
-        self.show_message("Success", "Clipboard data imported to DB.")
+        self.show_message("Success", "Clipboard data imported to DB (overwrite).")
+
+
 
 
 if __name__ == "__main__":
